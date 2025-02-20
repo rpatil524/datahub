@@ -20,8 +20,8 @@ log = logging.getLogger(__name__)
 def _update_work_unit_id(
     envelope: RecordEnvelope, urn: str, aspect_name: str
 ) -> Dict[Any, Any]:
-    structured_urn = Urn.create_from_string(urn)
-    simple_name = "-".join(structured_urn.get_entity_id())
+    structured_urn = Urn.from_string(urn)
+    simple_name = "-".join(structured_urn.entity_ids)
     record_metadata = envelope.metadata.copy()
     record_metadata.update({"workunit_id": f"txform-{simple_name}-{aspect_name}"})
     return record_metadata
@@ -257,10 +257,12 @@ class BaseTransformer(Transformer, metaclass=ABCMeta):
                         transformed_aspect = self.transform_aspect(
                             entity_urn=urn,
                             aspect_name=self.aspect_name(),
-                            aspect=last_seen_mcp.aspect
-                            if last_seen_mcp
-                            and last_seen_mcp.aspectName == self.aspect_name()
-                            else None,
+                            aspect=(
+                                last_seen_mcp.aspect
+                                if last_seen_mcp
+                                and last_seen_mcp.aspectName == self.aspect_name()
+                                else None
+                            ),
                         )
                         if transformed_aspect:
                             structured_urn = Urn.from_string(urn)
@@ -269,9 +271,11 @@ class BaseTransformer(Transformer, metaclass=ABCMeta):
                                 MetadataChangeProposalWrapper(
                                     entityUrn=urn,
                                     entityType=structured_urn.get_type(),
-                                    systemMetadata=last_seen_mcp.systemMetadata
-                                    if last_seen_mcp
-                                    else last_seen_mce_system_metadata,
+                                    systemMetadata=(
+                                        last_seen_mcp.systemMetadata
+                                        if last_seen_mcp
+                                        else last_seen_mce_system_metadata
+                                    ),
                                     aspectName=self.aspect_name(),
                                     aspect=transformed_aspect,
                                 )

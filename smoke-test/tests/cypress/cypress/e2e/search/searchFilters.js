@@ -44,7 +44,7 @@ describe("search", () => {
     cy.visit("/");
     cy.get("input[data-testid=search-input]").type("*{enter}");
 
-    // click tag filter dropfdown inside of "More Filters"
+    // click tag filter dropdown inside of "More Filters"
     cy.get("[data-testid=more-filters-dropdown").click({ force: true });
     cy.get("[data-testid=more-filter-Tag").click({ force: true });
 
@@ -54,17 +54,17 @@ describe("search", () => {
     cy.get("[data-testid=update-filters").click({ force: true });
     cy.url().should(
       "include",
-      "filter_tags___false___EQUAL___0=urn%3Ali%3Atag%3ACypress"
+      "filter_tags___false___EQUAL___0=urn%3Ali%3Atag%3ACypress",
     );
-    cy.get("[data-testid=update-filters").should("not.exist");
+    cy.get("[data-testid=update-filters").should("not.be.visible");
 
     // select datasets filter
     cy.get("[data-testid=filter-dropdown-Type").click({ force: true });
     cy.get("[data-testid=filter-option-Datasets").click({ force: true });
-    cy.get("[data-testid=update-filters").click({ force: true });
+    cy.get("[data-testid=update-filters").eq(1).click({ force: true });
     cy.url().should(
       "include",
-      "filter__entityType%E2%90%9EtypeNames___false___EQUAL___1=DATASET"
+      "filter__entityType%E2%90%9EtypeNames___false___EQUAL___1=DATASET",
     );
 
     // ensure expected entity is in search results
@@ -78,7 +78,7 @@ describe("search", () => {
     cy.get("[data-testid=remove-filter-Datasets").click({ force: true });
     cy.url().should(
       "not.include",
-      "filter__entityType%E2%90%9EtypeNames___false___EQUAL___1=DATASET"
+      "filter__entityType%E2%90%9EtypeNames___false___EQUAL___1=DATASET",
     );
     cy.get("[data-testid=active-filter-Datasets").should("not.exist");
 
@@ -86,7 +86,7 @@ describe("search", () => {
     cy.get("[data-testid=clear-all-filters").click({ force: true });
     cy.url().should(
       "not.include",
-      "filter_tags___false___EQUAL___0=urn%3Ali%3Atag%3ACypress"
+      "filter_tags___false___EQUAL___0=urn%3Ali%3Atag%3ACypress",
     );
     cy.get("[data-testid=active-filter-Cypress").should("not.exist");
   });

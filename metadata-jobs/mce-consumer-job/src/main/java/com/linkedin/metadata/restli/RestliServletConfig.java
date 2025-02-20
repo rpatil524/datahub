@@ -2,7 +2,9 @@ package com.linkedin.metadata.restli;
 
 import com.datahub.auth.authentication.filter.AuthenticationFilter;
 import com.linkedin.gms.factory.auth.SystemAuthenticationFactory;
+import com.linkedin.r2.transport.http.server.RAPJakartaServlet;
 import com.linkedin.restli.server.RestliHandlerServlet;
+import java.util.Collections;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -35,25 +37,25 @@ public class RestliServletConfig {
   }
 
   @Bean("restliHandlerServlet")
-  public RestliHandlerServlet restliHandlerServlet() {
-    return new RestliHandlerServlet();
+  public RestliHandlerServlet restliHandlerServlet(final RAPJakartaServlet r2Servlet) {
+    return new RestliHandlerServlet(r2Servlet);
   }
 
   @Bean
   public FilterRegistrationBean<AuthenticationFilter> authenticationFilterRegistrationBean(
-      @Qualifier("restliServletRegistration")
-          ServletRegistrationBean<RestliHandlerServlet> servlet) {
+      @Qualifier("restliServletRegistration") ServletRegistrationBean<RestliHandlerServlet> servlet,
+      AuthenticationFilter authenticationFilter) {
     FilterRegistrationBean<AuthenticationFilter> registrationBean = new FilterRegistrationBean<>();
-    registrationBean.addServletRegistrationBeans(servlet);
+    registrationBean.setServletRegistrationBeans(Collections.singletonList(servlet));
+    registrationBean.setUrlPatterns(Collections.singletonList("/gms/*"));
+    registrationBean.setServletNames(Collections.singletonList(servlet.getServletName()));
     registrationBean.setOrder(1);
+    registrationBean.setFilter(authenticationFilter);
     return registrationBean;
   }
 
   @Bean
-  public AuthenticationFilter authenticationFilter(
-      FilterRegistrationBean<AuthenticationFilter> filterReg) {
-    AuthenticationFilter filter = new AuthenticationFilter();
-    filterReg.setFilter(filter);
-    return filter;
+  public AuthenticationFilter authenticationFilter() {
+    return new AuthenticationFilter();
   }
 }

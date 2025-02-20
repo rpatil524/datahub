@@ -43,11 +43,15 @@ record FormPrompt {
     /**
      * The structured property that is required on this entity
      */
+    @Searchable = {
+      "fieldType": "URN",
+      "fieldName": "structuredPropertyPromptUrns",
+    }
     urn: Urn
   }
 
   /**
    * Whether the prompt is required to be completed, in order for the form to be marked as complete.
    */
-   required: boolean = true
+   required: boolean = false
 }

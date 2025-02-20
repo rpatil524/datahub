@@ -14,7 +14,11 @@ from click_default_group import DefaultGroup
 
 from datahub.api.entities.dataproduct.dataproduct import DataProduct
 from datahub.cli.specific.file_loader import load_file
-from datahub.emitter.mce_builder import make_group_urn, make_user_urn
+from datahub.emitter.mce_builder import (
+    make_group_urn,
+    make_user_urn,
+    validate_ownership_type,
+)
 from datahub.ingestion.graph.client import DataHubGraph, get_default_graph
 from datahub.metadata.schema_classes import OwnerClass, OwnershipTypeClass
 from datahub.specific.dataproduct import DataProductPatchBuilder
@@ -41,7 +45,7 @@ def _get_owner_urn(maybe_urn: str) -> str:
 
 def _abort_if_non_existent_urn(graph: DataHubGraph, urn: str, operation: str) -> None:
     try:
-        parsed_urn: Urn = Urn.create_from_string(urn)
+        parsed_urn: Urn = Urn.from_string(urn)
         entity_type = parsed_urn.get_type()
     except Exception:
         click.secho(f"Provided urn {urn} does not seem valid", fg="red")
@@ -332,8 +336,11 @@ def add_owner(urn: str, owner: str, owner_type: str) -> None:
     if not urn.startswith("urn:li:dataProduct:"):
         urn = f"urn:li:dataProduct:{urn}"
     dataproduct_patcher: DataProductPatchBuilder = DataProduct.get_patch_builder(urn)
+    owner_type, owner_type_urn = validate_ownership_type(owner_type)
     dataproduct_patcher.add_owner(
-        owner=OwnerClass(owner=_get_owner_urn(owner), type=owner_type)
+        owner=OwnerClass(
+            owner=_get_owner_urn(owner), type=owner_type, typeUrn=owner_type_urn
+        )
     )
     with get_default_graph() as graph:
         _abort_if_non_existent_urn(graph, urn, "add owners")
@@ -356,7 +363,7 @@ def remove_owner(urn: str, owner_urn: str) -> None:
     with get_default_graph() as graph:
         _abort_if_non_existent_urn(graph, urn, "remove owners")
         for mcp in dataproduct_patcher.build():
-            print(json.dumps(mcp.to_obj()))
+            click.echo(json.dumps(mcp.to_obj()))
             graph.emit(mcp)
 
 

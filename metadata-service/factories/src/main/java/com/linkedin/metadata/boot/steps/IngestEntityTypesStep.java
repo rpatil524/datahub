@@ -9,13 +9,15 @@ import com.linkedin.entitytype.EntityTypeInfo;
 import com.linkedin.events.metadata.ChangeType;
 import com.linkedin.metadata.boot.BootstrapStep;
 import com.linkedin.metadata.entity.EntityService;
-import com.linkedin.metadata.models.AspectSpec;
 import com.linkedin.metadata.models.EntitySpec;
-import com.linkedin.metadata.utils.EntityKeyUtils;
 import com.linkedin.metadata.utils.GenericRecordUtils;
-import com.linkedin.mxe.GenericAspect;
 import com.linkedin.mxe.MetadataChangeProposal;
+import com.linkedin.util.Pair;
+import io.datahubproject.metadata.context.OperationContext;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,40 +38,50 @@ public class IngestEntityTypesStep implements BootstrapStep {
   }
 
   @Override
-  public void execute() throws Exception {
+  public void execute(@Nonnull OperationContext systemOperationContext) throws Exception {
     log.info("Ingesting entity types from base entity registry...");
 
     log.info(
-        "Ingesting {} entity types", _entityService.getEntityRegistry().getEntitySpecs().size());
+        "Ingesting {} entity types",
+        systemOperationContext.getEntityRegistry().getEntitySpecs().size());
     int numIngested = 0;
-    for (final EntitySpec spec : _entityService.getEntityRegistry().getEntitySpecs().values()) {
-      final Urn entityTypeUrn =
-          UrnUtils.getUrn(
-              String.format("urn:li:entityType:%s.%s", DATAHUB_NAMESPACE, spec.getName()));
-      final EntityTypeInfo info =
-          new EntityTypeInfo()
-              .setDisplayName(spec.getName()) // TODO: Support display name in the entity registry.
-              .setQualifiedName(entityTypeUrn.getId());
-      log.info(String.format("Ingesting entity type with urn %s", entityTypeUrn));
-      ingestEntityType(entityTypeUrn, info);
-      numIngested++;
+
+    Map<Urn, EntitySpec> urnEntitySpecMap =
+        systemOperationContext.getEntityRegistry().getEntitySpecs().values().stream()
+            .map(
+                spec ->
+                    Pair.of(
+                        UrnUtils.getUrn(
+                            String.format(
+                                "urn:li:entityType:%s.%s", DATAHUB_NAMESPACE, spec.getName())),
+                        spec))
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    Set<Urn> existingUrns =
+        _entityService.exists(systemOperationContext, urnEntitySpecMap.keySet());
+
+    for (final Map.Entry<Urn, EntitySpec> entry : urnEntitySpecMap.entrySet()) {
+      if (!existingUrns.contains(entry.getKey())) {
+        final EntityTypeInfo info =
+            new EntityTypeInfo()
+                .setDisplayName(
+                    entry
+                        .getValue()
+                        .getName()) // TODO: Support display name in the entity registry.
+                .setQualifiedName(entry.getKey().getId());
+        log.info(String.format("Ingesting entity type with urn %s", entry.getKey()));
+        ingestEntityType(systemOperationContext, entry.getKey(), info);
+        numIngested++;
+      }
     }
     log.info("Ingested {} new entity types", numIngested);
   }
 
-  private void ingestEntityType(final Urn entityTypeUrn, final EntityTypeInfo info)
+  private void ingestEntityType(
+      @Nonnull OperationContext systemOperationContext,
+      final Urn entityTypeUrn,
+      final EntityTypeInfo info)
       throws Exception {
-    // Write key
-    final MetadataChangeProposal keyAspectProposal = new MetadataChangeProposal();
-    final AspectSpec keyAspectSpec = _entityService.getKeyAspectSpec(entityTypeUrn.getEntityType());
-    GenericAspect keyAspect =
-        GenericRecordUtils.serializeAspect(
-            EntityKeyUtils.convertUrnToEntityKey(entityTypeUrn, keyAspectSpec));
-    keyAspectProposal.setAspect(keyAspect);
-    keyAspectProposal.setAspectName(keyAspectSpec.getName());
-    keyAspectProposal.setEntityType(ENTITY_TYPE_ENTITY_NAME);
-    keyAspectProposal.setChangeType(ChangeType.UPSERT);
-    keyAspectProposal.setEntityUrn(entityTypeUrn);
 
     final MetadataChangeProposal proposal = new MetadataChangeProposal();
     proposal.setEntityUrn(entityTypeUrn);
@@ -79,6 +91,7 @@ public class IngestEntityTypesStep implements BootstrapStep {
     proposal.setChangeType(ChangeType.UPSERT);
 
     _entityService.ingestProposal(
+        systemOperationContext,
         proposal,
         new AuditStamp()
             .setActor(Urn.createFromString(SYSTEM_ACTOR))

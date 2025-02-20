@@ -25,6 +25,10 @@ import { ANTD_GRAY, ANTD_GRAY_V2 } from '../../../constants';
 import translateFieldPath from '../../../../dataset/profile/schema/utils/translateFieldPath';
 import PropertiesColumn from './components/PropertiesColumn';
 import SchemaFieldDrawer from './components/SchemaFieldDrawer/SchemaFieldDrawer';
+import useBusinessAttributeRenderer from './utils/useBusinessAttributeRenderer';
+import { useBusinessAttributesFlag } from '../../../../../useAppConfig';
+import { useGetTableColumnProperties } from './useGetTableColumnProperties';
+import { useGetStructuredPropColumns } from './useGetStructuredPropColumns';
 
 const TableContainer = styled.div`
     overflow: inherit;
@@ -89,6 +93,7 @@ export default function SchemaTable({
     hasProperties,
     inputFields,
 }: Props): JSX.Element {
+    const businessAttributesFlag = useBusinessAttributesFlag();
     const hasUsageStats = useMemo(() => (usageStats?.aggregations?.fields?.length || 0) > 0, [usageStats]);
     const [tableHeight, setTableHeight] = useState(0);
     const [selectedFkFieldPath, setSelectedFkFieldPath] = useState<null | {
@@ -119,8 +124,12 @@ export default function SchemaTable({
         filterText,
         false,
     );
+    const businessAttributeRenderer = useBusinessAttributeRenderer(filterText, false);
     const schemaTitleRenderer = useSchemaTitleRenderer(schemaMetadata, setSelectedFkFieldPath, filterText);
     const schemaBlameRenderer = useSchemaBlameRenderer(schemaFieldBlameList);
+
+    const tableColumnStructuredProps = useGetTableColumnProperties();
+    const structuredPropColumns = useGetStructuredPropColumns(tableColumnStructuredProps);
 
     const fieldColumn = {
         width: '22%',
@@ -158,6 +167,14 @@ export default function SchemaTable({
         render: termRenderer,
     };
 
+    const businessAttributeColumn = {
+        width: '18%',
+        title: 'Business Attribute',
+        dataIndex: 'businessAttribute',
+        key: 'businessAttribute',
+        render: businessAttributeRenderer,
+    };
+
     const blameColumn = {
         width: '10%',
         dataIndex: 'fieldPath',
@@ -176,7 +193,7 @@ export default function SchemaTable({
     function getCount(fieldPath: any) {
         const data: any =
             usageStats?.aggregations?.fields &&
-            usageStats?.aggregations?.fields.find((field) => {
+            usageStats?.aggregations?.fields?.find((field) => {
                 return field?.fieldName === fieldPath;
             });
         return data && data.count;
@@ -201,8 +218,16 @@ export default function SchemaTable({
 
     let allColumns: ColumnsType<ExtendedSchemaFields> = [fieldColumn, descriptionColumn, tagColumn, termColumn];
 
+    if (businessAttributesFlag) {
+        allColumns = [...allColumns, businessAttributeColumn];
+    }
+
     if (hasProperties) {
         allColumns = [...allColumns, propertiesColumn];
+    }
+
+    if (structuredPropColumns) {
+        allColumns = [...allColumns, ...structuredPropColumns];
     }
 
     if (hasUsageStats) {

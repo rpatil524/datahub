@@ -18,6 +18,8 @@ import { DocumentationTab } from '../shared/tabs/Documentation/DocumentationTab'
 import MlModelFeaturesTab from './profile/MlModelFeaturesTab';
 import { EntityMenuItems } from '../shared/EntityDropdown/EntityDropdown';
 import DataProductSection from '../shared/containers/profile/sidebar/DataProduct/DataProductSection';
+import SidebarStructuredPropsSection from '../shared/containers/profile/sidebar/StructuredProperties/SidebarStructuredPropsSection';
+import { IncidentTab } from '../shared/tabs/Incident/IncidentTab';
 
 /**
  * Definition of the DataHub MlModel entity.
@@ -52,6 +54,8 @@ export class MLModelEntity implements Entity<MlModel> {
 
     getAutoCompleteFieldName = () => 'name';
 
+    getGraphName = () => 'mlModel';
+
     getPathName = () => 'mlModels';
 
     getEntityName = () => 'ML Model';
@@ -63,6 +67,36 @@ export class MLModelEntity implements Entity<MlModel> {
             externalUrl: mlModel?.properties?.externalUrl,
         };
     };
+
+    useEntityQuery = useGetMlModelQuery;
+
+    getSidebarSections = () => [
+        {
+            component: SidebarAboutSection,
+        },
+        {
+            component: SidebarOwnerSection,
+            properties: {
+                defaultOwnerType: OwnershipType.TechnicalOwner,
+            },
+        },
+        {
+            component: SidebarTagsSection,
+            properties: {
+                hasTags: true,
+                hasTerms: true,
+            },
+        },
+        {
+            component: SidebarDomainSection,
+        },
+        {
+            component: DataProductSection,
+        },
+        {
+            component: SidebarStructuredPropsSection,
+        },
+    ];
 
     renderProfile = (urn: string) => (
         <EntityProfile
@@ -93,31 +127,16 @@ export class MLModelEntity implements Entity<MlModel> {
                     name: 'Properties',
                     component: PropertiesTab,
                 },
-            ]}
-            sidebarSections={[
                 {
-                    component: SidebarAboutSection,
-                },
-                {
-                    component: SidebarOwnerSection,
-                    properties: {
-                        defaultOwnerType: OwnershipType.TechnicalOwner,
+                    name: 'Incidents',
+                    component: IncidentTab,
+                    getDynamicName: (_, mlModel) => {
+                        const activeIncidentCount = mlModel?.mlModel?.activeIncidents?.total;
+                        return `Incidents${(activeIncidentCount && ` (${activeIncidentCount})`) || ''}`;
                     },
                 },
-                {
-                    component: SidebarTagsSection,
-                    properties: {
-                        hasTags: true,
-                        hasTerms: true,
-                    },
-                },
-                {
-                    component: SidebarDomainSection,
-                },
-                {
-                    component: DataProductSection,
-                },
             ]}
+            sidebarSections={this.getSidebarSections()}
         />
     );
 
@@ -133,7 +152,8 @@ export class MLModelEntity implements Entity<MlModel> {
     getLineageVizConfig = (entity: MlModel) => {
         return {
             urn: entity.urn,
-            name: entity.name,
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            name: entity.properties?.['propertiesName'] || entity.name,
             type: EntityType.Mlmodel,
             icon: entity.platform?.properties?.logoUrl || undefined,
             platform: entity.platform,
@@ -141,7 +161,7 @@ export class MLModelEntity implements Entity<MlModel> {
     };
 
     displayName = (data: MlModel) => {
-        return data.name || data.urn;
+        return data.properties?.name || data.name || data.urn;
     };
 
     getGenericEntityProperties = (mlModel: MlModel) => {

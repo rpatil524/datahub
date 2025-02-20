@@ -11,8 +11,8 @@ query getQuery($urn: String!) {
 fragment query on QueryEntity {
     urn
     properties {
-        description
         name
+        description
         source
         statement {
             value
@@ -26,11 +26,23 @@ fragment query on QueryEntity {
             time
             actor
         }
+        origin {
+            ...searchResultFields
+        }
+    }
+    platform {
+        ...platformFields
     }
     subjects {
         dataset {
             urn
+            type
             name
+        }
+        schemaField {
+            urn
+            type
+            fieldPath
         }
     }
 }
@@ -60,4 +72,30 @@ mutation updateQuery($urn: String!, $input: UpdateQueryInput!) {
 
 mutation deleteQuery($urn: String!) {
     deleteQuery(urn: $urn)
+}
+
+query searchAcrossLineageForQueries($input: SearchAcrossLineageInput!) {
+    searchAcrossLineage(input: $input) {
+        start
+        count
+        total
+        searchResults {
+            entity {
+                urn
+                type
+                ...searchResultFieldsNoLineage
+            }
+            paths {
+                path {
+                    urn
+                    type
+                    ... on QueryEntity {
+                        ...query
+                    }
+                }
+            }
+            explored
+            ignoredAsHop
+        }
+    }
 }

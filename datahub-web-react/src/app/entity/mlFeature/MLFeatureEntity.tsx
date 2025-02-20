@@ -17,6 +17,9 @@ import { LineageTab } from '../shared/tabs/Lineage/LineageTab';
 import { EntityMenuItems } from '../shared/EntityDropdown/EntityDropdown';
 import DataProductSection from '../shared/containers/profile/sidebar/DataProduct/DataProductSection';
 import { getDataProduct } from '../shared/utils';
+import { PropertiesTab } from '../shared/tabs/Properties/PropertiesTab';
+import SidebarStructuredPropsSection from '../shared/containers/profile/sidebar/StructuredProperties/SidebarStructuredPropsSection';
+import { IncidentTab } from '../shared/tabs/Incident/IncidentTab';
 
 /**
  * Definition of the DataHub MLFeature entity.
@@ -51,11 +54,15 @@ export class MLFeatureEntity implements Entity<MlFeature> {
 
     getAutoCompleteFieldName = () => 'name';
 
+    getGraphName = () => 'mlFeature';
+
     getPathName = () => 'features';
 
     getEntityName = () => 'Feature';
 
     getCollectionName = () => 'Features';
+
+    useEntityQuery = useGetMlFeatureQuery;
 
     getOverridePropertiesFromEntity = (feature?: MlFeature | null): GenericEntityProperties => {
         return {
@@ -85,33 +92,50 @@ export class MLFeatureEntity implements Entity<MlFeature> {
                     name: 'Lineage',
                     component: LineageTab,
                 },
-            ]}
-            sidebarSections={[
                 {
-                    component: SidebarAboutSection,
+                    name: 'Properties',
+                    component: PropertiesTab,
                 },
                 {
-                    component: SidebarOwnerSection,
-                    properties: {
-                        defaultOwnerType: OwnershipType.TechnicalOwner,
+                    name: 'Incidents',
+                    component: IncidentTab,
+                    getDynamicName: (_, mlFeature) => {
+                        const activeIncidentCount = mlFeature?.mlFeature?.activeIncidents?.total;
+                        return `Incidents${(activeIncidentCount && ` (${activeIncidentCount})`) || ''}`;
                     },
                 },
-                {
-                    component: SidebarTagsSection,
-                    properties: {
-                        hasTags: true,
-                        hasTerms: true,
-                    },
-                },
-                {
-                    component: SidebarDomainSection,
-                },
-                {
-                    component: DataProductSection,
-                },
             ]}
+            sidebarSections={this.getSidebarSections()}
         />
     );
+
+    getSidebarSections = () => [
+        {
+            component: SidebarAboutSection,
+        },
+        {
+            component: SidebarOwnerSection,
+            properties: {
+                defaultOwnerType: OwnershipType.TechnicalOwner,
+            },
+        },
+        {
+            component: SidebarTagsSection,
+            properties: {
+                hasTags: true,
+                hasTerms: true,
+            },
+        },
+        {
+            component: SidebarDomainSection,
+        },
+        {
+            component: DataProductSection,
+        },
+        {
+            component: SidebarStructuredPropsSection,
+        },
+    ];
 
     renderPreview = (_: PreviewType, data: MlFeature) => {
         const genericProperties = this.getGenericEntityProperties(data);

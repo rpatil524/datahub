@@ -48,13 +48,34 @@ export const DEFAULT_APP_CONFIG = {
         showSearchFiltersV2: true,
         showBrowseV2: true,
         showAcrylInfo: false,
+        erModelRelationshipFeatureEnabled: false,
         showAccessManagement: false,
         nestedDomainsEnabled: true,
         platformBrowseV2: false,
+        businessAttributeEntityEnabled: false,
+        dataContractsEnabled: false,
+        editableDatasetNameEnabled: false,
+        themeV2Enabled: false,
+        themeV2Default: false,
+        themeV2Toggleable: false,
+        lineageGraphV2: false,
+        showSeparateSiblings: false,
+        schemaFieldCLLEnabled: false,
+        schemaFieldLineageIgnoreStatus: false,
+        showManageStructuredProperties: false,
+        hideDbtSourceInLineage: false,
+        showNavBarRedesign: false,
+        showAutoCompleteResults: false,
+        entityVersioningEnabled: false,
+    },
+    chromeExtensionConfig: {
+        enabled: false,
+        lineageEnabled: false,
     },
 };
 
 export const AppConfigContext = React.createContext<{
     config: AppConfig;
+    loaded: boolean;
     refreshContext: () => void;
-}>({ config: DEFAULT_APP_CONFIG, refreshContext: () => null });
+}>({ config: DEFAULT_APP_CONFIG, loaded: false, refreshContext: () => null });

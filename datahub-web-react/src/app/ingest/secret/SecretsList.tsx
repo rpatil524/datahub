@@ -5,10 +5,12 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import * as QueryString from 'query-string';
 import { useLocation } from 'react-router';
 import styled from 'styled-components';
+import { useShowNavBarRedesign } from '@src/app/useShowNavBarRedesign';
 import {
     useCreateSecretMutation,
     useDeleteSecretMutation,
     useListSecretsQuery,
+    useUpdateSecretMutation,
 } from '../../../graphql/ingestion.generated';
 import { Message } from '../../shared/Message';
 import TabToolbar from '../../entity/shared/components/styled/TabToolbar';
@@ -18,7 +20,11 @@ import { StyledTable } from '../../entity/shared/components/styled/StyledTable';
 import { SearchBar } from '../../search/SearchBar';
 import { useEntityRegistry } from '../../useEntityRegistry';
 import { scrollToTop } from '../../shared/searchUtils';
-import { addSecretToListSecretsCache, removeSecretFromListSecretsCache } from './cacheUtils';
+import {
+    addSecretToListSecretsCache,
+    removeSecretFromListSecretsCache,
+    updateSecretInListSecretsCache,
+} from './cacheUtils';
 import { ONE_SECOND_IN_MS } from '../../entity/shared/tabs/Dataset/Queries/utils/constants';
 
 const DeleteButtonContainer = styled.div`
@@ -31,9 +37,19 @@ const SourcePaginationContainer = styled.div`
     justify-content: center;
 `;
 
+const StyledTableWithNavBarRedesign = styled(StyledTable)`
+    overflow: hidden;
+
+    &&& .ant-table-body {
+        overflow-y: auto;
+        height: calc(100vh - 450px);
+    }
+` as typeof StyledTable;
+
 const DEFAULT_PAGE_SIZE = 25;
 
 export const SecretsList = () => {
+    const isShowNavBarRedesign = useShowNavBarRedesign();
     const entityRegistry = useEntityRegistry();
     const location = useLocation();
     const params = QueryString.parse(location.search, { arrayFormat: 'comma' });
@@ -48,10 +64,12 @@ export const SecretsList = () => {
 
     // Whether or not there is an urn to show in the modal
     const [isCreatingSecret, setIsCreatingSecret] = useState<boolean>(false);
+    const [editSecret, setEditSecret] = useState<SecretBuilderState | undefined>(undefined);
 
     const [deleteSecretMutation] = useDeleteSecretMutation();
     const [createSecretMutation] = useCreateSecretMutation();
-    const { loading, error, data, client } = useListSecretsQuery({
+    const [updateSecretMutation] = useUpdateSecretMutation();
+    const { loading, error, data, client, refetch } = useListSecretsQuery({
         variables: {
             input: {
                 start,
@@ -111,7 +129,7 @@ export const SecretsList = () => {
                     {
                         urn: res.data?.createSecret || '',
                         name: state.name,
-                        description: state.description,
+                        description: state.description || '',
                     },
                     client,
                     pageSize,
@@ -120,7 +138,48 @@ export const SecretsList = () => {
             .catch((e) => {
                 message.destroy();
                 message.error({
-                    content: `Failed to update ingestion source!: \n ${e.message || ''}`,
+                    content: `Failed to update secret!: \n ${e.message || ''}`,
+                    duration: 3,
+                });
+            });
+    };
+    const onUpdate = (state: SecretBuilderState, resetBuilderState: () => void) => {
+        updateSecretMutation({
+            variables: {
+                input: {
+                    urn: state.urn as string,
+                    name: state.name as string,
+                    value: state.value as string,
+                    description: state.description as string,
+                },
+            },
+        })
+            .then(() => {
+                message.success({
+                    content: `Successfully updated Secret!`,
+                    duration: 3,
+                });
+                resetBuilderState();
+                setIsCreatingSecret(false);
+                setEditSecret(undefined);
+                updateSecretInListSecretsCache(
+                    {
+                        urn: state.urn,
+                        name: state.name,
+                        description: state.description,
+                    },
+                    client,
+                    pageSize,
+                    page,
+                );
+                setTimeout(() => {
+                    refetch();
+                }, 2000);
+            })
+            .catch((e) => {
+                message.destroy();
+                message.error({
+                    content: `Failed to update Secret!: \n ${e.message || ''}`,
                     duration: 3,
                 });
             });
@@ -138,6 +197,16 @@ export const SecretsList = () => {
             maskClosable: true,
             closable: true,
         });
+    };
+
+    const onEditSecret = (urnData: any) => {
+        setIsCreatingSecret(true);
+        setEditSecret(urnData);
+    };
+
+    const onCancel = () => {
+        setIsCreatingSecret(false);
+        setEditSecret(undefined);
     };
 
     const tableColumns = [
@@ -161,6 +230,9 @@ export const SecretsList = () => {
             key: 'x',
             render: (_, record: any) => (
                 <DeleteButtonContainer>
+                    <Button style={{ marginRight: 16 }} onClick={() => onEditSecret(record)}>
+                        EDIT
+                    </Button>
                     <Button onClick={() => onDeleteSecret(record.urn)} type="text" shape="circle" danger>
                         <DeleteOutlined />
                     </Button>
@@ -174,6 +246,8 @@ export const SecretsList = () => {
         name: secret.name,
         description: secret.description,
     }));
+
+    const FinalStyledTable = isShowNavBarRedesign ? StyledTableWithNavBarRedesign : StyledTable;
 
     return (
         <>
@@ -211,9 +285,10 @@ export const SecretsList = () => {
                         hideRecommendations
                     />
                 </TabToolbar>
-                <StyledTable
+                <FinalStyledTable
                     columns={tableColumns}
                     dataSource={tableData}
+                    scroll={isShowNavBarRedesign ? { y: 'max-content' } : {}}
                     rowKey="urn"
                     locale={{
                         emptyText: <Empty description="No Secrets found!" image={Empty.PRESENTED_IMAGE_SIMPLE} />,
@@ -233,9 +308,11 @@ export const SecretsList = () => {
                 </SourcePaginationContainer>
             </div>
             <SecretBuilderModal
-                visible={isCreatingSecret}
+                open={isCreatingSecret}
+                editSecret={editSecret}
+                onUpdate={onUpdate}
                 onSubmit={onSubmit}
-                onCancel={() => setIsCreatingSecret(false)}
+                onCancel={onCancel}
             />
         </>
     );

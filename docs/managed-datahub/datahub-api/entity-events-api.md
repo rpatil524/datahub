@@ -15,6 +15,7 @@ The Events API allows you to integrate changes happening on the DataHub Metadata
 ### Supported Integrations
 
 * [AWS EventBridge](docs/managed-datahub/operator-guide/setting-up-events-api-on-aws-eventbridge.md)
+* [DataHub Cloud Event Source](docs/actions/sources/datahub-cloud-event-source.md)
 
 ### Use Cases
 
@@ -342,6 +343,70 @@ This event is emitted when an existing owner has been removed from an entity on 
   "auditStamp": {
     "actor": "urn:li:corpuser:jdoe",
     "time": 1649953100653   
+  }
+}
+```
+
+### Add Description Event
+
+This event is emitted when a description has been added to an entity on DataHub.
+
+#### Header
+
+<table><thead><tr><th>Category</th><th>Operation</th><th>Entity Types</th><th data-hidden></th></tr></thead><tbody><tr><td>DOCUMENTATION</td><td>ADD</td><td><code>dataset</code>, <code>dashboard</code>, <code>chart</code>, <code>dataJob</code>, <code>dataFlow</code> , <code>container</code>, <code>glossaryTerm</code>, <code>domain</code>, <code>tag</code>, <code>schemaField</code></td><td></td></tr></tbody></table>
+
+#### Parameters
+
+| Name        | Type   | Description                                                                                                  | Optional |
+|-------------| ------ |--------------------------------------------------------------------------------------------------------------| -------- |
+| description | String | The description that has been added.                                                                         | False    |
+
+#### Sample Event
+
+```
+{
+  "entityUrn": "urn:li:dataset:abc",
+  "entityType": "dataset",
+  "category": "DOCUMENTATION",
+  "operation": "ADD",
+  "parameters": {
+    "description": "This is a new description"
+  },
+  "auditStamp": {
+    "actor": "urn:li:corpuser:jdoe",
+    "time": 1706646452982
+  }
+}
+```
+
+### Remove Description Event
+
+This event is emitted when an existing description has been removed from an entity on DataHub.
+
+#### Header
+
+<table><thead><tr><th>Category</th><th>Operation</th><th>Entity Types</th><th data-hidden></th></tr></thead><tbody><tr><td>DOCUMENTATION</td><td>REMOVE</td><td><code>dataset</code>, <code>dashboard</code>, <code>chart</code>, <code>dataJob</code>, <code>container</code> ,<code>dataFlow</code> , <code>glossaryTerm</code>, <code>domain</code>, <code>tag</code>, <code>schemaField</code></td><td></td></tr></tbody></table>
+
+#### Parameters
+
+| Name        | Type   | Description                            | Optional |
+|-------------| ------ |----------------------------------------| -------- |
+| description | String | The description that has been removed. | False    |
+
+#### Sample Event
+
+```
+{
+  "entityUrn": "urn:li:dataset:abc",
+  "entityType": "dataset",
+  "category": "DOCUMENTATION",
+  "operation": "REMOVE",
+  "parameters": {
+    "description": "This is the removed description"
+  },
+  "auditStamp": {
+    "actor": "urn:li:corpuser:jdoe",
+    "time": 1706646452982
   }
 }
 ```

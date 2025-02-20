@@ -2,8 +2,9 @@ package com.linkedin.datahub.graphql.resolvers.search;
 
 import static com.linkedin.datahub.graphql.TestUtils.getMockAllowContext;
 import static com.linkedin.datahub.graphql.resolvers.search.SearchUtils.SEARCHABLE_ENTITY_TYPES;
+import static com.linkedin.metadata.utils.CriterionUtils.buildCriterion;
+import static org.mockito.ArgumentMatchers.any;
 
-import com.datahub.authentication.Authentication;
 import com.google.common.collect.ImmutableList;
 import com.linkedin.common.AuditStamp;
 import com.linkedin.common.urn.Urn;
@@ -21,7 +22,6 @@ import com.linkedin.metadata.Constants;
 import com.linkedin.metadata.query.filter.Condition;
 import com.linkedin.metadata.query.filter.ConjunctiveCriterion;
 import com.linkedin.metadata.query.filter.ConjunctiveCriterionArray;
-import com.linkedin.metadata.query.filter.Criterion;
 import com.linkedin.metadata.query.filter.CriterionArray;
 import com.linkedin.metadata.query.filter.Filter;
 import com.linkedin.metadata.search.SearchEntityArray;
@@ -107,7 +107,7 @@ public class AggregateAcrossEntitiesResolverTest {
     FormService mockFormService = Mockito.mock(FormService.class);
     ViewService mockService = initMockViewService(TEST_VIEW_URN, info);
 
-    Filter baseFilter = createFilter("baseField.keyword", "baseTest");
+    Filter baseFilter = createFilter("baseField", "baseTest");
 
     EntityClient mockClient =
         initMockEntityClient(
@@ -318,14 +318,14 @@ public class AggregateAcrossEntitiesResolverTest {
     EntityClient mockClient = Mockito.mock(EntityClient.class);
     Mockito.when(
             mockClient.searchAcrossEntities(
+                any(),
                 Mockito.anyList(),
                 Mockito.anyString(),
                 Mockito.any(),
                 Mockito.anyInt(),
                 Mockito.anyInt(),
-                Mockito.eq(null),
-                Mockito.eq(null),
-                Mockito.any(Authentication.class)))
+                Mockito.eq(Collections.emptyList()),
+                Mockito.eq(null)))
         .thenThrow(new RemoteInvocationException());
 
     final AggregateAcrossEntitiesResolver resolver =
@@ -348,13 +348,7 @@ public class AggregateAcrossEntitiesResolverTest {
                 new ConjunctiveCriterion()
                     .setAnd(
                         new CriterionArray(
-                            ImmutableList.of(
-                                new Criterion()
-                                    .setField(field)
-                                    .setValue(value)
-                                    .setCondition(Condition.EQUAL)
-                                    .setNegated(false)
-                                    .setValues(new StringArray(ImmutableList.of(value))))))));
+                            ImmutableList.of(buildCriterion(field, Condition.EQUAL, value))))));
   }
 
   private static DataHubViewInfo getViewInfo(Filter viewFilter) {
@@ -375,8 +369,7 @@ public class AggregateAcrossEntitiesResolverTest {
 
   private static ViewService initMockViewService(Urn viewUrn, DataHubViewInfo viewInfo) {
     ViewService service = Mockito.mock(ViewService.class);
-    Mockito.when(service.getViewInfo(Mockito.eq(viewUrn), Mockito.any(Authentication.class)))
-        .thenReturn(viewInfo);
+    Mockito.when(service.getViewInfo(any(), Mockito.eq(viewUrn))).thenReturn(viewInfo);
     return service;
   }
 
@@ -392,14 +385,17 @@ public class AggregateAcrossEntitiesResolverTest {
     EntityClient client = Mockito.mock(EntityClient.class);
     Mockito.when(
             client.searchAcrossEntities(
-                Mockito.eq(entityTypes),
+                any(),
+                Mockito.argThat(
+                    argument ->
+                        argument != null
+                            && argument.containsAll(entityTypes)
+                            && entityTypes.containsAll(argument)),
                 Mockito.eq(query),
                 Mockito.eq(filter),
                 Mockito.eq(start),
                 Mockito.eq(limit),
-                Mockito.eq(null),
-                Mockito.eq(null),
-                Mockito.any(Authentication.class),
+                Mockito.eq(Collections.emptyList()),
                 Mockito.eq(facets)))
         .thenReturn(result);
     return client;
@@ -416,20 +412,22 @@ public class AggregateAcrossEntitiesResolverTest {
       throws Exception {
     Mockito.verify(mockClient, Mockito.times(1))
         .searchAcrossEntities(
-            Mockito.eq(entityTypes),
+            any(),
+            Mockito.argThat(
+                argument ->
+                    argument != null
+                        && argument.containsAll(entityTypes)
+                        && entityTypes.containsAll(argument)),
             Mockito.eq(query),
             Mockito.eq(filter),
             Mockito.eq(start),
             Mockito.eq(limit),
-            Mockito.eq(null),
-            Mockito.eq(null),
-            Mockito.any(Authentication.class),
+            Mockito.eq(Collections.emptyList()),
             Mockito.eq(facets));
   }
 
   private static void verifyMockViewService(ViewService mockService, Urn viewUrn) {
-    Mockito.verify(mockService, Mockito.times(1))
-        .getViewInfo(Mockito.eq(viewUrn), Mockito.any(Authentication.class));
+    Mockito.verify(mockService, Mockito.times(1)).getViewInfo(any(), Mockito.eq(viewUrn));
   }
 
   private AggregateAcrossEntitiesResolverTest() {}

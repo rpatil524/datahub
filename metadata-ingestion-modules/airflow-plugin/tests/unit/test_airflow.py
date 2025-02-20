@@ -1,7 +1,6 @@
 import datetime
 import json
 import os
-import sys
 from contextlib import contextmanager
 from typing import Iterator
 from unittest import mock
@@ -9,12 +8,12 @@ from unittest.mock import Mock
 
 import airflow.configuration
 import airflow.version
-import datahub.emitter.mce_builder as builder
 import packaging.version
 import pytest
 from airflow.lineage import apply_lineage, prepare_lineage
 from airflow.models import DAG, Connection, DagBag, DagRun, TaskInstance
 
+import datahub.emitter.mce_builder as builder
 from datahub_airflow_plugin import get_provider_info
 from datahub_airflow_plugin._airflow_shims import (
     AIRFLOW_PATCHED,
@@ -24,6 +23,7 @@ from datahub_airflow_plugin._airflow_shims import (
 from datahub_airflow_plugin.entities import Dataset, Urn
 from datahub_airflow_plugin.hooks.datahub import DatahubKafkaHook, DatahubRestHook
 from datahub_airflow_plugin.operators.datahub import DatahubEmitterOperator
+from tests.utils import PytestConfig
 
 assert AIRFLOW_PATCHED
 
@@ -41,13 +41,13 @@ lineage_mce = builder.make_lineage_mce(
 datahub_rest_connection_config = Connection(
     conn_id="datahub_rest_test",
     conn_type="datahub_rest",
-    host="http://test_host:8080/",
+    host="http://test_host:8080",
     extra=None,
 )
 datahub_rest_connection_config_with_timeout = Connection(
     conn_id="datahub_rest_test",
     conn_type="datahub_rest",
-    host="http://test_host:8080/",
+    host="http://test_host:8080",
     extra=json.dumps({"timeout_sec": 5}),
 )
 
@@ -75,7 +75,7 @@ def test_airflow_provider_info():
 
 
 @pytest.mark.filterwarnings("ignore:.*is deprecated.*")
-def test_dags_load_with_no_errors(pytestconfig: pytest.Config) -> None:
+def test_dags_load_with_no_errors(pytestconfig: PytestConfig) -> None:
     airflow_examples_folder = (
         pytestconfig.rootpath / "src/datahub_airflow_plugin/example_dags"
     )
@@ -242,9 +242,7 @@ def test_lineage_backend(mock_emit, inlets, outlets, capture_executions):
         },
     ), mock.patch("airflow.models.BaseOperator.xcom_pull"), mock.patch(
         "airflow.models.BaseOperator.xcom_push"
-    ), patch_airflow_connection(
-        datahub_rest_connection_config
-    ):
+    ), patch_airflow_connection(datahub_rest_connection_config):
         func = mock.Mock()
         func.__name__ = "foo"
 
@@ -275,7 +273,10 @@ def test_lineage_backend(mock_emit, inlets, outlets, capture_executions):
         if AIRFLOW_VERSION < packaging.version.parse("2.2.0"):
             ti = TaskInstance(task=op2, execution_date=DEFAULT_DATE)
             # Ignoring type here because DagRun state is just a sring at Airflow 1
-            dag_run = DagRun(state="success", run_id=f"scheduled_{DEFAULT_DATE.isoformat()}")  # type: ignore
+            dag_run = DagRun(
+                state="success",  # type: ignore[arg-type]
+                run_id=f"scheduled_{DEFAULT_DATE.isoformat()}",
+            )
         else:
             from airflow.utils.state import DagRunState
 
@@ -316,139 +317,148 @@ def test_lineage_backend(mock_emit, inlets, outlets, capture_executions):
         assert all(map(lambda let: isinstance(let, Dataset), op2.outlets))
 
         # Check that the right things were emitted.
-        assert mock_emitter.emit.call_count == 17 if capture_executions else 9
+        assert mock_emitter.emit.call_count == 19 if capture_executions else 11
 
-        # Running further checks based on python version because args only exists in python 3.8+
-        if sys.version_info > (3, 8):
-            assert mock_emitter.method_calls[0].args[0].aspectName == "dataFlowInfo"
+        # TODO: Replace this with a golden file-based comparison.
+        assert mock_emitter.method_calls[0].args[0].aspectName == "dataFlowInfo"
+        assert (
+            mock_emitter.method_calls[0].args[0].entityUrn
+            == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
+        )
+
+        assert mock_emitter.method_calls[1].args[0].aspectName == "status"
+        assert (
+            mock_emitter.method_calls[1].args[0].entityUrn
+            == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
+        )
+
+        assert mock_emitter.method_calls[2].args[0].aspectName == "ownership"
+        assert (
+            mock_emitter.method_calls[2].args[0].entityUrn
+            == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
+        )
+
+        assert mock_emitter.method_calls[3].args[0].aspectName == "globalTags"
+        assert (
+            mock_emitter.method_calls[3].args[0].entityUrn
+            == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
+        )
+
+        assert mock_emitter.method_calls[4].args[0].aspectName == "dataJobInfo"
+        assert (
+            mock_emitter.method_calls[4].args[0].entityUrn
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+        )
+
+        assert mock_emitter.method_calls[5].args[0].aspectName == "status"
+        assert (
+            mock_emitter.method_calls[5].args[0].entityUrn
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+        )
+
+        assert mock_emitter.method_calls[6].args[0].aspectName == "dataJobInputOutput"
+        assert (
+            mock_emitter.method_calls[6].args[0].entityUrn
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+        )
+        assert (
+            mock_emitter.method_calls[6].args[0].aspect.inputDatajobs[0]
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task1_upstream)"
+        )
+        assert (
+            mock_emitter.method_calls[6].args[0].aspect.inputDatajobs[1]
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,testDag,PROD),testTask)"
+        )
+        assert (
+            mock_emitter.method_calls[6].args[0].aspect.inputDatasets[0]
+            == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableConsumed,PROD)"
+        )
+        assert (
+            mock_emitter.method_calls[6].args[0].aspect.outputDatasets[0]
+            == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableProduced,PROD)"
+        )
+
+        assert mock_emitter.method_calls[7].args[0].aspectName == "datasetKey"
+        assert (
+            mock_emitter.method_calls[7].args[0].entityUrn
+            == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableConsumed,PROD)"
+        )
+
+        assert mock_emitter.method_calls[8].args[0].aspectName == "datasetKey"
+        assert (
+            mock_emitter.method_calls[8].args[0].entityUrn
+            == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableProduced,PROD)"
+        )
+
+        assert mock_emitter.method_calls[9].args[0].aspectName == "ownership"
+        assert (
+            mock_emitter.method_calls[9].args[0].entityUrn
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+        )
+
+        assert mock_emitter.method_calls[10].args[0].aspectName == "globalTags"
+        assert (
+            mock_emitter.method_calls[10].args[0].entityUrn
+            == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+        )
+
+        if capture_executions:
             assert (
-                mock_emitter.method_calls[0].args[0].entityUrn
-                == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
+                mock_emitter.method_calls[11].args[0].aspectName
+                == "dataProcessInstanceProperties"
+            )
+            assert (
+                mock_emitter.method_calls[11].args[0].entityUrn
+                == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
             )
 
-            assert mock_emitter.method_calls[1].args[0].aspectName == "ownership"
             assert (
-                mock_emitter.method_calls[1].args[0].entityUrn
-                == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
-            )
-
-            assert mock_emitter.method_calls[2].args[0].aspectName == "globalTags"
-            assert (
-                mock_emitter.method_calls[2].args[0].entityUrn
-                == "urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod)"
-            )
-
-            assert mock_emitter.method_calls[3].args[0].aspectName == "dataJobInfo"
-            assert (
-                mock_emitter.method_calls[3].args[0].entityUrn
-                == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
-            )
-
-            assert (
-                mock_emitter.method_calls[4].args[0].aspectName == "dataJobInputOutput"
+                mock_emitter.method_calls[12].args[0].aspectName
+                == "dataProcessInstanceRelationships"
             )
             assert (
-                mock_emitter.method_calls[4].args[0].entityUrn
-                == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+                mock_emitter.method_calls[12].args[0].entityUrn
+                == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
             )
             assert (
-                mock_emitter.method_calls[4].args[0].aspect.inputDatajobs[0]
-                == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task1_upstream)"
+                mock_emitter.method_calls[13].args[0].aspectName
+                == "dataProcessInstanceInput"
             )
             assert (
-                mock_emitter.method_calls[4].args[0].aspect.inputDatajobs[1]
-                == "urn:li:dataJob:(urn:li:dataFlow:(airflow,testDag,PROD),testTask)"
+                mock_emitter.method_calls[13].args[0].entityUrn
+                == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
             )
             assert (
-                mock_emitter.method_calls[4].args[0].aspect.inputDatasets[0]
+                mock_emitter.method_calls[14].args[0].aspectName
+                == "dataProcessInstanceOutput"
+            )
+            assert (
+                mock_emitter.method_calls[14].args[0].entityUrn
+                == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
+            )
+            assert mock_emitter.method_calls[15].args[0].aspectName == "datasetKey"
+            assert (
+                mock_emitter.method_calls[15].args[0].entityUrn
                 == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableConsumed,PROD)"
             )
+            assert mock_emitter.method_calls[16].args[0].aspectName == "datasetKey"
             assert (
-                mock_emitter.method_calls[4].args[0].aspect.outputDatasets[0]
+                mock_emitter.method_calls[16].args[0].entityUrn
                 == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableProduced,PROD)"
             )
-
-            assert mock_emitter.method_calls[5].args[0].aspectName == "status"
             assert (
-                mock_emitter.method_calls[5].args[0].entityUrn
-                == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableConsumed,PROD)"
+                mock_emitter.method_calls[17].args[0].aspectName
+                == "dataProcessInstanceRunEvent"
             )
-
-            assert mock_emitter.method_calls[6].args[0].aspectName == "status"
             assert (
-                mock_emitter.method_calls[6].args[0].entityUrn
-                == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableProduced,PROD)"
+                mock_emitter.method_calls[17].args[0].entityUrn
+                == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
             )
-
-            assert mock_emitter.method_calls[7].args[0].aspectName == "ownership"
             assert (
-                mock_emitter.method_calls[7].args[0].entityUrn
-                == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+                mock_emitter.method_calls[18].args[0].aspectName
+                == "dataProcessInstanceRunEvent"
             )
-
-            assert mock_emitter.method_calls[8].args[0].aspectName == "globalTags"
             assert (
-                mock_emitter.method_calls[8].args[0].entityUrn
-                == "urn:li:dataJob:(urn:li:dataFlow:(airflow,test_lineage_is_sent_to_backend,prod),task2)"
+                mock_emitter.method_calls[18].args[0].entityUrn
+                == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
             )
-
-            if capture_executions:
-                assert (
-                    mock_emitter.method_calls[9].args[0].aspectName
-                    == "dataProcessInstanceProperties"
-                )
-                assert (
-                    mock_emitter.method_calls[9].args[0].entityUrn
-                    == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
-                )
-
-                assert (
-                    mock_emitter.method_calls[10].args[0].aspectName
-                    == "dataProcessInstanceRelationships"
-                )
-                assert (
-                    mock_emitter.method_calls[10].args[0].entityUrn
-                    == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
-                )
-                assert (
-                    mock_emitter.method_calls[11].args[0].aspectName
-                    == "dataProcessInstanceInput"
-                )
-                assert (
-                    mock_emitter.method_calls[11].args[0].entityUrn
-                    == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
-                )
-                assert (
-                    mock_emitter.method_calls[12].args[0].aspectName
-                    == "dataProcessInstanceOutput"
-                )
-                assert (
-                    mock_emitter.method_calls[12].args[0].entityUrn
-                    == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
-                )
-                assert mock_emitter.method_calls[13].args[0].aspectName == "status"
-                assert (
-                    mock_emitter.method_calls[13].args[0].entityUrn
-                    == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableConsumed,PROD)"
-                )
-                assert mock_emitter.method_calls[14].args[0].aspectName == "status"
-                assert (
-                    mock_emitter.method_calls[14].args[0].entityUrn
-                    == "urn:li:dataset:(urn:li:dataPlatform:snowflake,mydb.schema.tableProduced,PROD)"
-                )
-                assert (
-                    mock_emitter.method_calls[15].args[0].aspectName
-                    == "dataProcessInstanceRunEvent"
-                )
-                assert (
-                    mock_emitter.method_calls[15].args[0].entityUrn
-                    == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
-                )
-                assert (
-                    mock_emitter.method_calls[16].args[0].aspectName
-                    == "dataProcessInstanceRunEvent"
-                )
-                assert (
-                    mock_emitter.method_calls[16].args[0].entityUrn
-                    == "urn:li:dataProcessInstance:5e274228107f44cc2dd7c9782168cc29"
-                )

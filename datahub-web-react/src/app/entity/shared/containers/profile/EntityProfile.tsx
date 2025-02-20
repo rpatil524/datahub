@@ -23,7 +23,7 @@ import { ANTD_GRAY } from '../../constants';
 import { EntityHeader } from './header/EntityHeader';
 import { EntityTabs } from './header/EntityTabs';
 import { EntitySidebar } from './sidebar/EntitySidebar';
-import EntityContext from '../../EntityContext';
+import { EntityContext } from '../../EntityContext';
 import useIsLineageMode from '../../../../lineage/utils/useIsLineageMode';
 import { useEntityRegistry } from '../../../../useEntityRegistry';
 import LineageExplorer from '../../../../lineage/LineageExplorer';
@@ -45,6 +45,7 @@ import {
 import { useAppConfig } from '../../../../useAppConfig';
 import { useUpdateDomainEntityDataOnChange } from '../../../../domain/utils';
 import ProfileSidebar from './sidebar/ProfileSidebar';
+import SidebarFormInfoWrapper from './sidebar/FormInfo/SidebarFormInfoWrapper';
 
 type Props<T, U> = {
     urn: string;
@@ -156,6 +157,8 @@ export const EntityProfile = <T, U>({
     hideBrowseBar,
     subHeader,
 }: Props<T, U>): JSX.Element => {
+    const { config } = useAppConfig();
+    const { erModelRelationshipFeatureEnabled } = config.featureFlags;
     const isLineageMode = useIsLineageMode();
     const isHideSiblingMode = useIsSeparateSiblingsMode();
     const entityRegistry = useEntityRegistry();
@@ -163,6 +166,19 @@ export const EntityProfile = <T, U>({
     const appConfig = useAppConfig();
     const isCompact = React.useContext(CompactContext);
     const tabsWithDefaults = tabs.map((tab) => ({ ...tab, display: { ...defaultTabDisplayConfig, ...tab.display } }));
+
+    if (erModelRelationshipFeatureEnabled) {
+        const relationIndex = tabsWithDefaults.findIndex((tab) => {
+            return tab.name === 'Relationships';
+        });
+        if (relationIndex >= 0) {
+            tabsWithDefaults[relationIndex] = {
+                ...tabsWithDefaults[relationIndex],
+                display: { ...defaultTabDisplayConfig },
+            };
+        }
+    }
+
     const sortedTabs = sortEntityProfileTabs(appConfig.config, entityType, tabsWithDefaults);
     const sideBarSectionsWithDefaults = sidebarSections.map((sidebarSection) => ({
         ...sidebarSection,
@@ -307,7 +323,13 @@ export const EntityProfile = <T, U>({
                 {showBrowseBar && <EntityProfileNavBar urn={urn} entityType={entityType} />}
                 {entityData?.status?.removed === true && (
                     <Alert
-                        message="This entity is not discoverable via search or lineage graph. Contact your DataHub admin for more information."
+                        message={
+                            <>
+                                This entity is marked as soft-deleted, likely due to stateful ingestion or a manual
+                                deletion command, and will not appear in search or lineage graphs. Contact your DataHub
+                                admin for more information.
+                            </>
+                        }
                         banner
                     />
                 )}
@@ -333,7 +355,10 @@ export const EntityProfile = <T, U>({
                                         </TabContent>
                                     </HeaderAndTabsFlex>
                                 </HeaderAndTabs>
-                                <ProfileSidebar sidebarSections={sidebarSections} />
+                                <ProfileSidebar
+                                    sidebarSections={sidebarSections}
+                                    topSection={{ component: SidebarFormInfoWrapper }}
+                                />
                             </>
                         )}
                     </ContentContainer>
